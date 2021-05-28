@@ -56,38 +56,9 @@ resource "aws_security_group" "prod_web" {
     }    
 }
 
-# creating two instances and allocate prod_web security group.
-resource "aws_instance" "prod_web" {
-    count = 2
-
-    ami                    = "ami-0b0af3577fe5e3532"
-    instance_type          = "t2.micro"
-
-    vpc_security_group_ids = [ aws_security_group.prod_web.id ]
-
-        tags = {
-            Name : "production"
-    } 
-}
-
-# creating elastic IP
-resource "aws_eip" "prod_web_ip" {
-    tags = {
-        Name : "production_IP"
-    } 
-}
-
-# Assinging elastic IP for second instance.
-resource "aws_eip_association" "prod_web" {
-    instance_id   = aws_instance.prod_web[1].id
-    allocation_id = aws_eip.prod_web_ip.id
-
-}
-
 # Creating ELB
 resource "aws_elb" "prod_web_elb" {
     name            = "prod-web-elb"
-    instances       = aws_instance.prod_web.*.id
     subnets         = [ aws_default_subnet.default_az1.id,aws_default_subnet.default_az2.id ]
     security_groups = [ aws_security_group.prod_web.id ]
 
@@ -100,4 +71,41 @@ resource "aws_elb" "prod_web_elb" {
       tags = {
         Name : "production_ELB"
     } 
+}
+
+# Creating AutoScaling template
+resource "aws_launch_template" "prod_web_template" {
+  name_prefix   = "prod-web-template"
+  image_id      = "ami-056e352aaf80d0656"
+  vpc_security_group_ids = [ aws_security_group.prod_web.id]
+  
+  instance_type = "t2.micro"
+
+        tags = {
+        Name : "production"
+    }
+}
+
+resource "aws_autoscaling_group" "prod_group" {
+  #availability_zones  = ["us-east-1a","us-east-1b"]
+  vpc_zone_identifier = [ aws_default_subnet.default_az1.id,aws_default_subnet.default_az2.id  ]
+  desired_capacity    = 2
+  max_size            = 3
+  min_size            = 1
+
+  launch_template {
+    id      = aws_launch_template.prod_web_template.id
+    version = "$Latest"
+  }
+     #   tag  {
+      #  Key = "Name"
+       # value = "Production"
+        #propagate_at_launch = true
+
+   # }
+}
+
+resource "aws_autoscaling_attachment" "prod_web" {
+  autoscaling_group_name = aws_autoscaling_group.prod_group.id
+  elb                    = aws_elb.prod_web_elb.id
 }
