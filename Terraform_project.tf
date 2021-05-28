@@ -70,59 +70,19 @@ resource "aws_security_group" "prod_web" {
     }
 
     tags = {
-        Name : "production"
+        Name : "httpd"
     }    
 }
 
-# Creating ELB
-resource "aws_elb" "prod_web_elb" {
-    name            = "prod-web-elb"
-    subnets         = [ aws_default_subnet.default_az1.id,aws_default_subnet.default_az2.id ]
-    security_groups = [ aws_security_group.prod_web.id ]
+module "web_app" {
+    source = "./modules/web_application"
 
-    listener {
-      instance_port     = 80
-      instance_protocol = "http"
-      lb_port           = 80
-      lb_protocol       = "http"
-    }
-      tags = {
-        Name : "production_ELB"
-    } 
-}
-
-# Creating AutoScaling template
-resource "aws_launch_template" "prod_web_template" {
-  name_prefix   = "prod-web-template"
-  image_id      = var.web_image_id
-  vpc_security_group_ids = [ aws_security_group.prod_web.id]
-  
-  instance_type = var.web_instance_type
-
-        tags = {
-        Name : "production"
-    }
-}
-
-resource "aws_autoscaling_group" "prod_group" {
-  vpc_zone_identifier = [ aws_default_subnet.default_az1.id,aws_default_subnet.default_az2.id  ]
-  desired_capacity    = var.web_desired_capacity
-  max_size            = var.web_max_size
-  min_size            = var.web_min_size
-
-  launch_template {
-    id      = aws_launch_template.prod_web_template.id
-    version = "$Latest"
-  }
-     #   tag  {
-      #  Key = "Name"
-       # value = "Production"
-        #propagate_at_launch = true
-
-   # }
-}
-
-resource "aws_autoscaling_attachment" "prod_web" {
-  autoscaling_group_name = aws_autoscaling_group.prod_group.id
-  elb                    = aws_elb.prod_web_elb.id
+web_image_id         = var.web_image_id
+web_instance_type    = var.web_instance_type
+web_desired_capacity = var.web_desired_capacity
+web_max_size         = var.web_max_size
+web_min_size         = var.web_min_size
+subnets              = [ aws_default_subnet.default_az1.id,aws_default_subnet.default_az2.id ]
+security_groups      = [ aws_security_group.prod_web.id ]
+web_app              = "prod"
 }
